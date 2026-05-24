@@ -83,10 +83,10 @@ export default function Display() {
       onClick={handleExit}
       data-testid="display-screen"
     >
-      {/* Standby overlay — visible only before go-live */}
+      {/* Standby overlay — slides down off-screen when go-live is triggered */}
       <div
-        className="absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-700"
-        style={{ opacity: isActive ? 0 : 1, pointerEvents: isActive ? "none" : "auto" }}
+        className="absolute inset-0 flex flex-col items-center justify-center transition-transform duration-1000 ease-in-out"
+        style={{ transform: isActive ? "translateY(100%)" : "translateY(0)", pointerEvents: isActive ? "none" : "auto" }}
       >
         {/* Dark wash so text is readable over any color */}
         <div className="absolute inset-0 bg-black/70" />
