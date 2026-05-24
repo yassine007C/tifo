@@ -14,7 +14,7 @@ export default function Display() {
     query: {
       enabled: !!id,
       queryKey: getGetServerStatusQueryKey(id),
-      refetchInterval: 2000,
+      refetchInterval: 1000,
     }
   });
 
