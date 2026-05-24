@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Tifo"
+version = "1.0.0"
+id = "artifacts/tifo"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23178
+
+[services.development]
+run = "pnpm --filter @workspace/tifo run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tifo", "run", "build" ]
+publicDir = "artifacts/tifo/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23178"
+BASE_PATH = "/"
