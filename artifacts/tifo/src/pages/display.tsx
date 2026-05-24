@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useGetServerStatus, getGetServerStatusQueryKey, useGetMyAssignment, getGetMyAssignmentQueryKey } from "@workspace/api-client-react";
+import {
+  useGetServerStatus,
+  getGetServerStatusQueryKey,
+  useGetMyAssignment,
+  getGetMyAssignmentQueryKey,
+} from "@workspace/api-client-react";
 
 export default function Display() {
   const [, params] = useRoute("/server/:id/display");
@@ -15,19 +20,19 @@ export default function Display() {
       enabled: !!id,
       queryKey: getGetServerStatusQueryKey(id),
       refetchInterval: 1000,
-    }
+    },
   });
 
-  // Fetch assignment separately so we always have the color even before activation
+  // Always fetch assignment so color is visible immediately, before go-live
   const { data: assignment } = useGetMyAssignment(id, {
     query: {
       enabled: !!id,
       queryKey: getGetMyAssignmentQueryKey(id),
-    }
+    },
   });
 
-  // Prefer status.myColor (returned when active) then fall back to assignment color
   const myColor = status?.myColor ?? assignment?.color ?? null;
+  const isActive = status?.isActive ?? false;
 
   useEffect(() => {
     async function requestWakeLock() {
@@ -43,25 +48,20 @@ export default function Display() {
     requestWakeLock();
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        requestWakeLock();
-      }
+      if (document.visibilityState === "visible") requestWakeLock();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
       wakeLockRef.current?.release();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
-  const handleExit = () => {
-    setLocation(`/server/${id}`);
-  };
+  const handleExit = () => setLocation(`/server/${id}`);
 
-  // Still loading initial status
-  if (!status && !assignment) {
+  // Still loading — show spinner
+  if (!assignment && !status) {
     return (
       <div
         className="fixed inset-0 bg-black flex items-center justify-center cursor-pointer"
@@ -73,54 +73,56 @@ export default function Display() {
     );
   }
 
-  // Display is active — fill screen with pixel color
-  if (status?.isActive) {
-    const bgColor = myColor ?? "#111111";
-    return (
-      <div
-        className="fixed inset-0 cursor-pointer transition-colors duration-700 ease-in-out z-50 flex flex-col items-center justify-end pb-8"
-        style={{ backgroundColor: bgColor }}
-        onClick={handleExit}
-        data-testid="display-active"
-      >
-        <div className="opacity-40 text-white font-black uppercase tracking-widest text-sm pointer-events-none">
-          Hold phone up &bull; Tap to exit
-        </div>
-      </div>
-    );
-  }
-
-  // Standby — waiting for admin to activate
+  // Color is always shown as the background.
+  // Before go-live: a dark overlay + standby message sits on top.
+  // After go-live: overlay fades out, full pure color.
   return (
     <div
-      className="fixed inset-0 bg-black flex flex-col items-center justify-center cursor-pointer z-50 p-8"
+      className="fixed inset-0 cursor-pointer z-50 transition-colors duration-700"
+      style={{ backgroundColor: myColor ?? "#111111" }}
       onClick={handleExit}
-      data-testid="display-standby"
+      data-testid="display-screen"
     >
-      {myColor && (
-        <div
-          className="w-16 h-16 rounded-full border-4 border-white/20 mb-8 shadow-2xl"
-          style={{ backgroundColor: myColor }}
-          title="Your assigned color"
-        />
+      {/* Standby overlay — visible only before go-live */}
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center transition-opacity duration-700"
+        style={{ opacity: isActive ? 0 : 1, pointerEvents: isActive ? "none" : "auto" }}
+      >
+        {/* Dark wash so text is readable over any color */}
+        <div className="absolute inset-0 bg-black/70" />
+
+        <div className="relative z-10 flex flex-col items-center gap-6 px-8 text-center">
+          {/* Color preview dot */}
+          {myColor && (
+            <div
+              className="w-20 h-20 rounded-full border-4 border-white/30 shadow-2xl"
+              style={{ backgroundColor: myColor }}
+              data-testid="color-preview-dot"
+            />
+          )}
+
+          {/* Pulse indicator */}
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 bg-primary/30 rounded-full animate-ping" style={{ animationDuration: "2.5s" }} />
+            <div className="absolute inset-3 bg-primary/50 rounded-full animate-ping" style={{ animationDuration: "1.8s" }} />
+            <div className="absolute inset-5 bg-primary rounded-full animate-pulse" />
+          </div>
+
+          <h1 className="text-4xl font-black text-white uppercase tracking-widest">Standby</h1>
+          <p className="text-white/60 text-base uppercase tracking-wider font-bold">
+            Waiting for admin to go live
+          </p>
+        </div>
+      </div>
+
+      {/* Active hint — visible only after go-live */}
+      {isActive && (
+        <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-none">
+          <p className="text-white/40 font-black uppercase tracking-widest text-sm">
+            Hold phone up &bull; Tap to exit
+          </p>
+        </div>
       )}
-
-      <div className="relative w-24 h-24 mb-10">
-        <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" style={{ animationDuration: "3s" }} />
-        <div className="absolute inset-4 bg-primary/40 rounded-full animate-ping" style={{ animationDuration: "2s" }} />
-        <div className="absolute inset-8 bg-primary rounded-full animate-pulse" />
-      </div>
-
-      <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-widest text-center mb-4">
-        Standby
-      </h1>
-      <p className="text-white/60 text-base md:text-lg font-medium tracking-wider text-center uppercase max-w-xs">
-        Waiting for admin to go live
-      </p>
-
-      <div className="absolute bottom-8 opacity-40 text-white/50 font-bold uppercase tracking-widest text-xs">
-        Tap anywhere to return
-      </div>
     </div>
   );
 }
