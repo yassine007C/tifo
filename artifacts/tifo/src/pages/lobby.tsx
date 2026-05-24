@@ -51,7 +51,7 @@ export default function Lobby() {
     if (assignment?.x === x && assignment?.y === y) return; // already here
 
     updatePosition.mutate(
-      { id, data: { x, y } },
+      { serverId: id, data: { x, y } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetMyAssignmentQueryKey(id) });
