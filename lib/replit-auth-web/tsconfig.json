@@ -7,7 +7,7 @@
     "lib": ["esnext", "dom", "dom.iterable"],
     "composite": true,
     "declarationMap": true,
-    "emitDeclarationOnly": true
+    "emitDeclarationOnly": true,
   },
   "include": ["src"]
 }

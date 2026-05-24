@@ -6,9 +6,11 @@ import {
   useGetMyAssignment,
   useListParticipants,
   useUpdateMyPosition,
+  useGetServerPixels,
   getGetServerQueryKey,
   getGetMyAssignmentQueryKey,
   getListParticipantsQueryKey,
+  getGetServerPixelsQueryKey,
 } from "@workspace/api-client-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useQueryClient } from "@tanstack/react-query";
@@ -39,6 +41,10 @@ export default function Lobby() {
       queryKey: getListParticipantsQueryKey(id),
       refetchInterval: 3000,
     },
+  });
+
+  const { data: pixelData } = useGetServerPixels(id, {
+    query: { enabled: !!id, queryKey: getGetServerPixelsQueryKey(id) },
   });
 
   const updatePosition = useUpdateMyPosition();
@@ -264,37 +270,31 @@ export default function Lobby() {
                 >
                   {Array.from({ length: server.height }).map((_, y) =>
                     Array.from({ length: server.width }).map((_, x) => {
+                      const pixelIndex = y * server.width + x;
+                      const imageColor = pixelData?.pixels?.[pixelIndex] ?? "#1f1f1f";
                       const occupant = participantMap.get(`${x},${y}`);
                       const isMe = assignment?.x === x && assignment?.y === y;
                       const isEmpty = !occupant;
                       const isHovered = hoveredCell?.x === x && hoveredCell?.y === y;
 
-                      let bgColor = "#1f1f1f";
-                      let cursor = "default";
-                      let ringClass = "";
-
-                      if (occupant) {
-                        bgColor = occupant.color;
-                        if (isMe) {
-                          ringClass = "ring-2 ring-white ring-offset-1 ring-offset-black scale-125 z-10";
-                          cursor = "default";
-                        }
-                      }
-
-                      if (isEmpty && !isMe) {
-                        cursor = "pointer";
-                        if (isHovered) bgColor = "#2a2a2a";
-                      }
+                      const ringClass = isMe
+                        ? "ring-2 ring-white ring-offset-1 ring-offset-black scale-125 z-10"
+                        : "";
+                      const cursor = isEmpty ? "pointer" : "default";
 
                       return (
                         <div
                           key={`${x}-${y}`}
-                          className={`relative transition-all duration-150 ${ringClass} ${isEmpty && isHovered ? "brightness-150" : ""}`}
+                          className={`relative transition-all duration-150 ${ringClass}`}
                           style={{
-                            backgroundColor: bgColor,
+                            backgroundColor: imageColor,
                             aspectRatio: "1",
                             cursor,
                             minWidth: "10px",
+                            // Dim pixels with no participant assigned yet
+                            opacity: occupant ? 1 : 0.35,
+                            // Brighten on hover for empty cells
+                            filter: isEmpty && isHovered ? "brightness(2)" : "none",
                           }}
                           title={
                             occupant
@@ -303,9 +303,7 @@ export default function Lobby() {
                           }
                           onMouseEnter={() => setHoveredCell({ x, y })}
                           onMouseLeave={() => setHoveredCell(null)}
-                          onClick={() => {
-                            if (isEmpty) handleMoveToCell(x, y);
-                          }}
+                          onClick={() => { if (isEmpty) handleMoveToCell(x, y); }}
                           data-testid={`grid-cell-${x}-${y}`}
                         />
                       );

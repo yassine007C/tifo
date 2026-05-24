@@ -102,6 +102,13 @@ export interface PositionUpdate {
   y: number;
 }
 
+export interface PixelData {
+  /** Hex color strings in row-major order */
+  pixels: string[];
+  width: number;
+  height: number;
+}
+
 export interface ServerStatus {
   serverId: number;
   isActive: boolean;

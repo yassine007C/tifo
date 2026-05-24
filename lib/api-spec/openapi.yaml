@@ -359,6 +359,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /servers/{serverId}/pixels:
+    get:
+      operationId: getServerPixels
+      tags: [servers]
+      summary: Get the full pixel color array for a Tifo server
+      parameters:
+        - $ref: "#/components/parameters/ServerIdParam"
+      responses:
+        "200":
+          description: Array of hex color strings in row-major order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PixelData"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
   /servers/{serverId}/status:
     get:
       operationId: getServerStatus
@@ -672,6 +699,20 @@ components:
         x:
           type: integer
         y:
+          type: integer
+
+    PixelData:
+      type: object
+      required: [pixels, width, height]
+      properties:
+        pixels:
+          type: array
+          items:
+            type: string
+          description: Hex color strings in row-major order
+        width:
+          type: integer
+        height:
           type: integer
 
     ServerStatus:

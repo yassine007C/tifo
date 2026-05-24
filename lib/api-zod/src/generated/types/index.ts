@@ -19,6 +19,7 @@ export * from './logoutSuccess';
 export * from './mobileTokenExchangeRequest';
 export * from './mobileTokenExchangeSuccess';
 export * from './participant';
+export * from './pixelData';
 export * from './positionUpdate';
 export * from './serverStatus';
 export * from './tifoServer';

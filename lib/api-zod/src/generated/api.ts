@@ -237,6 +237,20 @@ export const DeactivateServerResponse = zod.object({
 
 
 /**
+ * @summary Get the full pixel color array for a Tifo server
+ */
+export const GetServerPixelsParams = zod.object({
+  "serverId": zod.coerce.number()
+})
+
+export const GetServerPixelsResponse = zod.object({
+  "pixels": zod.array(zod.string()).describe('Hex color strings in row-major order'),
+  "width": zod.number(),
+  "height": zod.number()
+})
+
+
+/**
  * @summary Poll for server activation status and your pixel color
  */
 export const GetServerStatusParams = zod.object({

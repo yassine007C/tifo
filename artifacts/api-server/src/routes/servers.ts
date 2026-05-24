@@ -9,6 +9,7 @@ import {
   ActivateServerParams,
   DeactivateServerParams,
   GetServerStatusParams,
+  GetServerPixelsParams,
   ListParticipantsParams,
   GetMyAssignmentParams,
   UpdateMyPositionParams,
@@ -336,6 +337,29 @@ router.post("/servers/:serverId/deactivate", async (req, res): Promise<void> => 
   await db.update(tifoServersTable).set({ isActive: false }).where(eq(tifoServersTable.id, params.data.serverId));
   const result = await getServerWithCount(params.data.serverId);
   res.json(result);
+});
+
+// GET /servers/:serverId/pixels — return full pixel color array
+router.get("/servers/:serverId/pixels", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const params = GetServerPixelsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [server] = await db.select().from(tifoServersTable).where(eq(tifoServersTable.id, params.data.serverId));
+  if (!server) {
+    res.status(404).json({ error: "Server not found" });
+    return;
+  }
+
+  const pixels: string[] = JSON.parse(server.pixelData);
+  res.json({ pixels, width: server.width, height: server.height });
 });
 
 // GET /servers/:serverId/status — poll for activation + your color

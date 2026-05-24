@@ -31,6 +31,7 @@ import type {
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
   Participant,
+  PixelData,
   PositionUpdate,
   ServerStatus,
   TifoServer,
@@ -1095,6 +1096,83 @@ export const useDeactivateServer = <TError = ErrorType<ErrorEnvelope>,
       > => {
       return useMutation(getDeactivateServerMutationOptions(options));
     }
+
+export const getGetServerPixelsUrl = (serverId: number,) => {
+
+
+
+
+  return `/api/servers/${serverId}/pixels`
+}
+
+/**
+ * @summary Get the full pixel color array for a Tifo server
+ */
+export const getServerPixels = async (serverId: number, options?: RequestInit): Promise<PixelData> => {
+
+  return customFetch<PixelData>(getGetServerPixelsUrl(serverId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetServerPixelsQueryKey = (serverId: number,) => {
+    return [
+    `/api/servers/${serverId}/pixels`
+    ] as const;
+    }
+
+
+export const getGetServerPixelsQueryOptions = <TData = Awaited<ReturnType<typeof getServerPixels>>, TError = ErrorType<ErrorEnvelope>>(serverId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServerPixels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetServerPixelsQueryKey(serverId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getServerPixels>>> = ({ signal }) => getServerPixels(serverId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(serverId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getServerPixels>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetServerPixelsQueryResult = NonNullable<Awaited<ReturnType<typeof getServerPixels>>>
+export type GetServerPixelsQueryError = ErrorType<ErrorEnvelope>
+
+
+/**
+ * @summary Get the full pixel color array for a Tifo server
+ */
+
+export function useGetServerPixels<TData = Awaited<ReturnType<typeof getServerPixels>>, TError = ErrorType<ErrorEnvelope>>(
+ serverId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServerPixels>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetServerPixelsQueryOptions(serverId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetServerStatusUrl = (serverId: number,) => {
 
