@@ -2,18 +2,21 @@ import { useRoute, Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { 
   useGetServer, 
-  useListParticipants, 
+  useListParticipants,
+  useGetServerPixels,
   useActivateServer,
   useDeactivateServer,
   getGetServerQueryKey,
-  getListParticipantsQueryKey
+  getListParticipantsQueryKey,
+  getGetServerPixelsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Play, Square, Users, Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Play, Square, Users, Check, Copy, Grid3X3 } from "lucide-react";
+import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Admin() {
@@ -23,6 +26,7 @@ export default function Admin() {
   const queryClient = useQueryClient();
 
   const [copied, setCopied] = useState(false);
+  const [showSeatMap, setShowSeatMap] = useState(false);
 
   const { data: server, isLoading: isServerLoading } = useGetServer(id, {
     query: {
@@ -38,6 +42,19 @@ export default function Admin() {
       refetchInterval: 5000,
     }
   });
+
+  const { data: pixelData } = useGetServerPixels(id, {
+    query: {
+      enabled: !!id && showSeatMap,
+      queryKey: getGetServerPixelsQueryKey(id),
+    },
+  });
+
+  const participantMap = useMemo(() => {
+    const map = new Map<string, (typeof participants)[0]>();
+    participants?.forEach((p) => map.set(`${p.x},${p.y}`, p));
+    return map;
+  }, [participants]);
 
   const activateServer = useActivateServer();
   const deactivateServer = useDeactivateServer();
@@ -162,6 +179,127 @@ export default function Admin() {
               </CardContent>
             </Card>
           </div>
+        </div>
+        {/* Seat Map */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black uppercase tracking-tight">Seat Map</h2>
+              <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mt-1">
+                {server.width} × {server.height} grid — {server.participantCount} of {server.totalPixels} filled
+              </p>
+            </div>
+            <Button
+              variant={showSeatMap ? "default" : "outline"}
+              className="font-bold uppercase tracking-wider"
+              onClick={() => setShowSeatMap((v) => !v)}
+            >
+              <Grid3X3 className="w-4 h-4 mr-2" />
+              {showSeatMap ? "Hide Map" : "Show Map"}
+            </Button>
+          </div>
+
+          {showSeatMap && (
+            <Card className="bg-card overflow-hidden">
+              <CardContent className="p-4 space-y-3">
+                {/* Legend */}
+                <div className="flex gap-6 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm border border-white/20 opacity-35 bg-white/20" />
+                    Empty
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm border border-white/20 bg-primary" />
+                    Occupied
+                  </div>
+                </div>
+
+                {/* Scrollable grid */}
+                <div className="overflow-auto rounded border border-border bg-black/40">
+                  {(() => {
+                    const CELL = server.width <= 30 ? 28 : server.width <= 50 ? 22 : 16;
+                    const AXIS = 32;
+                    const STEP = server.width <= 20 ? 1 : server.width <= 50 ? 5 : 10;
+                    const fontSize = CELL >= 26 ? 7 : CELL >= 20 ? 5.5 : 4;
+
+                    return (
+                      <div style={{ display: "inline-block", minWidth: "100%" }}>
+                        {/* X-axis header */}
+                        <div className="flex" style={{ paddingLeft: AXIS }}>
+                          {Array.from({ length: server.width }, (_, x) => (
+                            <div
+                              key={x}
+                              style={{ width: CELL, flexShrink: 0, fontSize: 8 }}
+                              className="flex items-end justify-center pb-0.5 font-mono font-bold text-muted-foreground/70 leading-none"
+                            >
+                              {x % STEP === 0 ? x : ""}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Data rows */}
+                        {Array.from({ length: server.height }, (_, y) => (
+                          <div key={y} className="flex">
+                            {/* Y-axis label */}
+                            <div
+                              style={{ width: AXIS, flexShrink: 0, fontSize: 8 }}
+                              className="flex items-center justify-end pr-1.5 font-mono font-bold text-muted-foreground/70 leading-none"
+                            >
+                              {y % STEP === 0 ? y : ""}
+                            </div>
+
+                            {/* Cells */}
+                            {Array.from({ length: server.width }, (_, x) => {
+                              const pixelIndex = y * server.width + x;
+                              const seatNumber = pixelIndex + 1;
+                              const imageColor = pixelData?.pixels?.[pixelIndex] ?? "#2a2a2a";
+                              const occupant = participantMap.get(`${x},${y}`);
+
+                              return (
+                                <div
+                                  key={x}
+                                  title={`Seat ${seatNumber}  X:${x} Y:${y}${occupant ? `\n${occupant.displayName}` : "  (empty)"}`}
+                                  style={{
+                                    width: CELL,
+                                    height: CELL,
+                                    flexShrink: 0,
+                                    backgroundColor: imageColor,
+                                    opacity: occupant ? 1 : 0.3,
+                                    outline: "1px solid rgba(0,0,0,0.25)",
+                                  }}
+                                  className="relative flex items-center justify-center overflow-hidden"
+                                >
+                                  <span
+                                    style={{ fontSize, lineHeight: 1 }}
+                                    className="font-mono font-bold text-white/80 select-none drop-shadow-sm"
+                                  >
+                                    {seatNumber}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
+
+                        {/* X-axis footer (repeat for tall grids) */}
+                        <div className="flex" style={{ paddingLeft: AXIS }}>
+                          {Array.from({ length: server.width }, (_, x) => (
+                            <div
+                              key={x}
+                              style={{ width: CELL, flexShrink: 0, fontSize: 8 }}
+                              className="flex items-start justify-center pt-0.5 font-mono font-bold text-muted-foreground/70 leading-none"
+                            >
+                              {x % STEP === 0 ? x : ""}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </Layout>
