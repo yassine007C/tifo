@@ -16,6 +16,7 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +27,10 @@ export default function Lobby() {
   const id = params?.id ? parseInt(params.id, 10) : 0;
   const { user } = useAuth();
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number } | null>(null);
+  const [manualX, setManualX] = useState("");
+  const [manualY, setManualY] = useState("");
+  const [manualSeat, setManualSeat] = useState("");
+  const [manualError, setManualError] = useState<string | null>(null);
 
   const { data: server, isLoading: isServerLoading } = useGetServer(id, {
     query: { enabled: !!id, queryKey: getGetServerQueryKey(id) },
@@ -73,6 +78,78 @@ export default function Lobby() {
         },
       }
     );
+  };
+
+  const totalPixels = server ? server.width * server.height : 0;
+
+  const seatToCoords = (seat: number) => ({
+    x: (seat - 1) % (server?.width ?? 1),
+    y: Math.floor((seat - 1) / (server?.width ?? 1)),
+  });
+
+  const coordsToSeat = (x: number, y: number) =>
+    (server ? y * server.width + x + 1 : 0);
+
+  const handleManualMove = () => {
+    if (!server) return;
+    setManualError(null);
+
+    const x = parseInt(manualX, 10);
+    const y = parseInt(manualY, 10);
+
+    if (isNaN(x) || isNaN(y) || x < 0 || x >= server.width || y < 0 || y >= server.height) {
+      setManualError(`X must be 0–${server.width - 1}, Y must be 0–${server.height - 1}`);
+      return;
+    }
+
+    const occupant = participantMap.get(`${x},${y}`);
+    if (occupant && occupant.userId !== user?.id) {
+      setManualError(`That spot is taken by ${occupant.displayName}`);
+      return;
+    }
+
+    handleMoveToCell(x, y);
+    setManualX("");
+    setManualY("");
+    setManualSeat("");
+  };
+
+  const onSeatChange = (raw: string) => {
+    setManualSeat(raw);
+    setManualError(null);
+    const seat = parseInt(raw, 10);
+    if (!isNaN(seat) && seat >= 1 && seat <= totalPixels) {
+      const { x, y } = seatToCoords(seat);
+      setManualX(String(x));
+      setManualY(String(y));
+    } else {
+      setManualX("");
+      setManualY("");
+    }
+  };
+
+  const onXChange = (raw: string) => {
+    setManualX(raw);
+    setManualError(null);
+    const x = parseInt(raw, 10);
+    const y = parseInt(manualY, 10);
+    if (!isNaN(x) && !isNaN(y) && server) {
+      setManualSeat(String(coordsToSeat(x, y)));
+    } else {
+      setManualSeat("");
+    }
+  };
+
+  const onYChange = (raw: string) => {
+    setManualY(raw);
+    setManualError(null);
+    const x = parseInt(manualX, 10);
+    const y = parseInt(raw, 10);
+    if (!isNaN(x) && !isNaN(y) && server) {
+      setManualSeat(String(coordsToSeat(x, y)));
+    } else {
+      setManualSeat("");
+    }
   };
 
   const isCreator = server?.creatorId === user?.id;
@@ -184,6 +261,82 @@ export default function Lobby() {
               </Card>
             )}
 
+            {/* Jump to Position */}
+            {assignment && (
+              <Card className="bg-card border border-border">
+                <CardContent className="pt-5 space-y-3">
+                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                    Jump to Position
+                  </p>
+
+                  {/* Seat number */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Seat # <span className="normal-case font-normal">(1–{totalPixels})</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={totalPixels}
+                        placeholder={`1–${totalPixels}`}
+                        value={manualSeat}
+                        onChange={(e) => onSeatChange(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleManualMove()}
+                        className="font-mono h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* X / Y */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Coordinates
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <span className="text-xs font-mono font-bold text-muted-foreground w-5">X</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={(server?.width ?? 1) - 1}
+                        placeholder={`0–${(server?.width ?? 1) - 1}`}
+                        value={manualX}
+                        onChange={(e) => onXChange(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleManualMove()}
+                        className="font-mono h-8 text-sm"
+                      />
+                      <span className="text-xs font-mono font-bold text-muted-foreground w-5">Y</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={(server?.height ?? 1) - 1}
+                        placeholder={`0–${(server?.height ?? 1) - 1}`}
+                        value={manualY}
+                        onChange={(e) => onYChange(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleManualMove()}
+                        className="font-mono h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {manualError && (
+                    <p className="text-xs text-destructive font-bold">{manualError}</p>
+                  )}
+
+                  <Button
+                    size="sm"
+                    className="w-full font-bold uppercase tracking-wider"
+                    disabled={(!manualSeat && (!manualX || !manualY)) || updatePosition.isPending}
+                    onClick={handleManualMove}
+                  >
+                    {updatePosition.isPending ? (
+                      <><Loader2 className="w-3 h-3 mr-2 animate-spin" /> Moving…</>
+                    ) : "Move Here"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Position move feedback */}
             {updatePosition.isPending && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground font-bold uppercase tracking-wider">
@@ -280,7 +433,7 @@ export default function Lobby() {
                       const ringClass = isMe
                         ? "ring-2 ring-white ring-offset-1 ring-offset-black scale-125 z-10"
                         : "";
-                      const cursor = isEmpty ? "pointer" : "default";
+                      const cursor = isMe ? "default" : isEmpty ? "pointer" : "not-allowed";
 
                       return (
                         <div
