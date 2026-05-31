@@ -51,8 +51,13 @@ export default function Admin() {
   });
 
   const participantMap = useMemo(() => {
-    const map = new Map<string, (typeof participants)[0]>();
-    participants?.forEach((p) => map.set(`${p.x},${p.y}`, p));
+    const map = new Map<string, (typeof participants)[0][]>();
+    participants?.forEach((p) => {
+      const key = `${p.x},${p.y}`;
+      const arr = map.get(key) ?? [];
+      arr.push(p);
+      map.set(key, arr);
+    });
     return map;
   }, [participants]);
 
@@ -102,11 +107,11 @@ export default function Admin() {
         const idx = y * server.width + x;
         const seat = idx + 1;
         const color = pixelData.pixels[idx] ?? "#2a2a2a";
-        const occupied = participantMap.has(`${x},${y}`);
+        const count = participantMap.get(`${x},${y}`)?.length ?? 0;
         const cx = AXIS + x * CELL;
         const cy = AXIS + y * CELL;
 
-        ctx.globalAlpha = occupied ? 1 : 0.28;
+        ctx.globalAlpha = count === 0 ? 0.25 : count === 1 ? 0.55 : count === 2 ? 0.78 : 1;
         ctx.fillStyle = color;
         ctx.fillRect(cx, cy, CELL, CELL);
 
@@ -355,18 +360,20 @@ export default function Admin() {
                               const pixelIndex = y * server.width + x;
                               const seatNumber = pixelIndex + 1;
                               const imageColor = pixelData?.pixels?.[pixelIndex] ?? "#2a2a2a";
-                              const occupant = participantMap.get(`${x},${y}`);
+                              const occupants = participantMap.get(`${x},${y}`) ?? [];
+                              const count = occupants.length;
+                              const cellOpacity = count === 0 ? 0.25 : count === 1 ? 0.55 : count === 2 ? 0.78 : 1;
 
                               return (
                                 <div
                                   key={x}
-                                  title={`Seat ${seatNumber}  X:${x} Y:${y}${occupant ? `\n${occupant.displayName}` : "  (empty)"}`}
+                                  title={`Seat ${seatNumber}  X:${x} Y:${y}  (${count}/3)${occupants.map((o) => `\n• ${o.displayName}`).join("")}`}
                                   style={{
                                     width: CELL,
                                     height: CELL,
                                     flexShrink: 0,
                                     backgroundColor: imageColor,
-                                    opacity: occupant ? 1 : 0.3,
+                                    opacity: cellOpacity,
                                     outline: "1px solid rgba(0,0,0,0.25)",
                                   }}
                                   className="relative flex items-center justify-center overflow-hidden"

@@ -57,8 +57,9 @@ export default function Lobby() {
   const { toast } = useToast();
 
   const handleMoveToCell = (x: number, y: number) => {
-    const occupant = participantMap.get(`${x},${y}`);
-    if (occupant && occupant.userId !== user?.id) return; // taken by someone else
+    const occupants = participantMap.get(`${x},${y}`) ?? [];
+    const othersHere = occupants.filter((o) => o.userId !== user?.id);
+    if (othersHere.length >= 3) return; // seat full
     if (assignment?.x === x && assignment?.y === y) return; // already here
 
     updatePosition.mutate(
@@ -102,9 +103,10 @@ export default function Lobby() {
       return;
     }
 
-    const occupant = participantMap.get(`${x},${y}`);
-    if (occupant && occupant.userId !== user?.id) {
-      setManualError(`That spot is taken by ${occupant.displayName}`);
+    const occupants = participantMap.get(`${x},${y}`) ?? [];
+    const othersHere = occupants.filter((o) => o.userId !== user?.id);
+    if (othersHere.length >= 3) {
+      setManualError(`Seat ${coordsToSeat(x, y)} is full (3/3)`);
       return;
     }
 
@@ -155,9 +157,14 @@ export default function Lobby() {
   const isCreator = server?.creatorId === user?.id;
 
   const participantMap = useMemo(() => {
-    const map = new Map<string, (typeof participants)[0]>();
+    const map = new Map<string, (typeof participants)[0][]>();
     if (participants) {
-      participants.forEach((p) => map.set(`${p.x},${p.y}`, p));
+      participants.forEach((p) => {
+        const key = `${p.x},${p.y}`;
+        const arr = map.get(key) ?? [];
+        arr.push(p);
+        map.set(key, arr);
+      });
     }
     return map;
   }, [participants]);
@@ -178,9 +185,9 @@ export default function Lobby() {
   }
 
   const hovered = hoveredCell;
-  const hoveredOccupant = hovered ? participantMap.get(`${hovered.x},${hovered.y}`) : null;
-  const hoveredIsMe = hovered && assignment?.x === hovered.x && assignment?.y === hovered.y;
-  const hoveredIsTaken = !!hoveredOccupant && !hoveredIsMe;
+  const hoveredOccupants = hovered ? (participantMap.get(`${hovered.x},${hovered.y}`) ?? []) : [];
+  const hoveredIsMe = hovered ? assignment?.x === hovered.x && assignment?.y === hovered.y : false;
+  const hoveredIsFull = hoveredOccupants.length >= 3;
 
   return (
     <Layout>
@@ -203,7 +210,7 @@ export default function Lobby() {
                 {server.isActive ? "Live" : "Standby"}
               </Badge>
               <Badge variant="outline" className="uppercase font-bold tracking-wider">
-                {server.participantCount} / {server.totalPixels} pixels
+                {server.participantCount} / {server.totalPixels * 3} seats
               </Badge>
             </div>
           </div>
@@ -387,12 +394,16 @@ export default function Lobby() {
               </h3>
               {hovered && (
                 <div className="text-xs font-mono font-bold text-muted-foreground">
-                  X:{hovered.x} Y:{hovered.y}
-                  {hoveredIsMe && <span className="text-primary ml-2">— you</span>}
-                  {hoveredIsTaken && (
-                    <span className="text-destructive ml-2">— taken by {hoveredOccupant?.displayName}</span>
+                  X:{hovered.x} Y:{hovered.y} &nbsp;
+                  <span className={hoveredIsFull ? "text-destructive" : hoveredOccupants.length > 0 ? "text-yellow-400" : "text-green-500"}>
+                    {hoveredOccupants.length}/3
+                  </span>
+                  {hoveredIsMe && <span className="text-primary ml-2">— you're here</span>}
+                  {!hoveredIsMe && hoveredIsFull && <span className="text-destructive ml-2">— full</span>}
+                  {!hoveredIsMe && !hoveredIsFull && hoveredOccupants.length > 0 && (
+                    <span className="text-yellow-400 ml-2">— click to join</span>
                   )}
-                  {!hoveredIsTaken && !hoveredIsMe && (
+                  {!hoveredIsMe && hoveredOccupants.length === 0 && (
                     <span className="text-green-500 ml-2">— click to move here</span>
                   )}
                 </div>
@@ -400,17 +411,21 @@ export default function Lobby() {
             </div>
 
             {/* Legend */}
-            <div className="flex gap-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="flex flex-wrap gap-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-sm bg-[#1f1f1f] border border-white/10" />
-                Empty
+                <div className="w-3 h-3 rounded-sm bg-white/20 border border-white/10" style={{ opacity: 0.35 }} />
+                Empty (0/3)
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-sm bg-primary border border-primary/50" />
-                Taken
+                <div className="w-3 h-3 rounded-sm bg-white/80 border border-white/10" style={{ opacity: 0.6 }} />
+                1–2 joined
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-sm border-2 border-primary" />
+                <div className="w-3 h-3 rounded-sm bg-white border border-white/10" />
+                Full (3/3)
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-sm border-2 border-white" />
                 You
               </div>
             </div>
@@ -425,15 +440,22 @@ export default function Lobby() {
                     Array.from({ length: server.width }).map((_, x) => {
                       const pixelIndex = y * server.width + x;
                       const imageColor = pixelData?.pixels?.[pixelIndex] ?? "#1f1f1f";
-                      const occupant = participantMap.get(`${x},${y}`);
+                      const occupants = participantMap.get(`${x},${y}`) ?? [];
+                      const count = occupants.length;
                       const isMe = assignment?.x === x && assignment?.y === y;
-                      const isEmpty = !occupant;
+                      const isFull = count >= 3 && !isMe;
+                      const isEmpty = count === 0;
                       const isHovered = hoveredCell?.x === x && hoveredCell?.y === y;
 
                       const ringClass = isMe
                         ? "ring-2 ring-white ring-offset-1 ring-offset-black scale-125 z-10"
                         : "";
-                      const cursor = isMe ? "default" : isEmpty ? "pointer" : "not-allowed";
+                      const cursor = isMe ? "default" : isFull ? "not-allowed" : "pointer";
+                      // Graduated brightness: 0→35%, 1→60%, 2→80%, 3→100%
+                      const opacity = count === 0 ? 0.35 : count === 1 ? 0.6 : count === 2 ? 0.8 : 1;
+                      const titleLines = isEmpty
+                        ? `Empty (0/3) — X:${x} Y:${y}\nclick to move here`
+                        : `${count}/3 — X:${x} Y:${y}\n${occupants.map((o) => `• ${o.displayName}${o.userId === user?.id ? " (you)" : ""}`).join("\n")}${!isFull && !isMe ? "\nclick to join" : isFull ? "\nfull" : ""}`;
 
                       return (
                         <div
@@ -444,19 +466,13 @@ export default function Lobby() {
                             aspectRatio: "1",
                             cursor,
                             minWidth: "10px",
-                            // Dim pixels with no participant assigned yet
-                            opacity: occupant ? 1 : 0.35,
-                            // Brighten on hover for empty cells
-                            filter: isEmpty && isHovered ? "brightness(2)" : "none",
+                            opacity,
+                            filter: !isFull && !isMe && isHovered ? "brightness(1.6)" : "none",
                           }}
-                          title={
-                            occupant
-                              ? `${occupant.displayName} — X:${x} Y:${y}`
-                              : `Empty — X:${x} Y:${y} — click to move here`
-                          }
+                          title={titleLines}
                           onMouseEnter={() => setHoveredCell({ x, y })}
                           onMouseLeave={() => setHoveredCell(null)}
-                          onClick={() => { if (isEmpty) handleMoveToCell(x, y); }}
+                          onClick={() => { if (!isFull && !isMe) handleMoveToCell(x, y); }}
                           data-testid={`grid-cell-${x}-${y}`}
                         />
                       );

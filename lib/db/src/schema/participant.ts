@@ -15,7 +15,6 @@ export const participantsTable = pgTable("participants", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique("participants_server_user").on(table.serverId, table.userId),
-  unique("participants_server_position").on(table.serverId, table.x, table.y),
 ]);
 
 export const insertParticipantSchema = createInsertSchema(participantsTable).omit({

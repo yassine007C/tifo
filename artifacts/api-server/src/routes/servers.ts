@@ -185,20 +185,21 @@ router.post("/servers/join", async (req, res): Promise<void> => {
 
   const pixels: string[] = JSON.parse(server.pixelData);
 
-  // Find next free pixel
-  const taken = await db
+  // Count occupants per pixel; each seat holds up to 3 participants
+  const allSlots = await db
     .select({ pixelNumber: participantsTable.pixelNumber })
     .from(participantsTable)
     .where(eq(participantsTable.serverId, server.id));
-  const takenSet = new Set(taken.map((t) => t.pixelNumber));
+  const countMap = new Map<number, number>();
+  allSlots.forEach((p) => countMap.set(p.pixelNumber, (countMap.get(p.pixelNumber) ?? 0) + 1));
 
   let nextPixel = 0;
-  while (nextPixel < server.totalPixels && takenSet.has(nextPixel)) {
+  while (nextPixel < server.totalPixels && (countMap.get(nextPixel) ?? 0) >= 3) {
     nextPixel++;
   }
 
   if (nextPixel >= server.totalPixels) {
-    res.status(400).json({ error: "This Tifo server is full — all pixels are taken." });
+    res.status(400).json({ error: "This Tifo server is full — all seats have 3 participants." });
     return;
   }
 
@@ -500,8 +501,8 @@ router.patch("/servers/:serverId/my-position", async (req, res): Promise<void> =
     return;
   }
 
-  // Check if target position is taken by someone else
-  const [taken] = await db
+  // Check seat capacity (max 3 per seat, excluding self)
+  const occupantsAtTarget = await db
     .select()
     .from(participantsTable)
     .where(and(
@@ -510,8 +511,9 @@ router.patch("/servers/:serverId/my-position", async (req, res): Promise<void> =
       eq(participantsTable.y, y),
     ));
 
-  if (taken && taken.userId !== req.user.id) {
-    res.status(400).json({ error: "That position is already taken by another participant." });
+  const othersAtTarget = occupantsAtTarget.filter((p) => p.userId !== req.user.id);
+  if (othersAtTarget.length >= 3) {
+    res.status(400).json({ error: "That seat is full (3/3 participants)." });
     return;
   }
 
