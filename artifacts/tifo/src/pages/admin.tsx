@@ -15,8 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Play, Square, Users, Check, Copy, Grid3X3 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { ArrowLeft, Play, Square, Users, Check, Copy, Grid3X3, Download } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Admin() {
@@ -55,6 +55,96 @@ export default function Admin() {
     participants?.forEach((p) => map.set(`${p.x},${p.y}`, p));
     return map;
   }, [participants]);
+
+  const downloadSeatMap = useCallback(() => {
+    if (!server || !pixelData?.pixels) return;
+
+    const CELL = server.width <= 30 ? 28 : server.width <= 50 ? 22 : 16;
+    const AXIS = 36;
+    const STEP = server.width <= 20 ? 1 : server.width <= 50 ? 5 : 10;
+    const fontSize = CELL >= 26 ? 7 : CELL >= 20 ? 5.5 : 4;
+    const SCALE = 2; // retina
+
+    const canvasW = AXIS + server.width * CELL;
+    const canvasH = AXIS + server.height * CELL + AXIS;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = canvasW * SCALE;
+    canvas.height = canvasH * SCALE;
+    const ctx = canvas.getContext("2d")!;
+    ctx.scale(SCALE, SCALE);
+
+    // Background
+    ctx.fillStyle = "#0d0d0d";
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    // Top X-axis labels
+    ctx.fillStyle = "rgba(180,180,180,0.8)";
+    ctx.font = `bold 8px monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    for (let x = 0; x < server.width; x++) {
+      if (x % STEP === 0)
+        ctx.fillText(String(x), AXIS + x * CELL + CELL / 2, AXIS - 2);
+    }
+
+    // Cells + Y-axis labels
+    for (let y = 0; y < server.height; y++) {
+      if (y % STEP === 0) {
+        ctx.fillStyle = "rgba(180,180,180,0.8)";
+        ctx.font = `bold 8px monospace`;
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(y), AXIS - 3, AXIS + y * CELL + CELL / 2);
+      }
+
+      for (let x = 0; x < server.width; x++) {
+        const idx = y * server.width + x;
+        const seat = idx + 1;
+        const color = pixelData.pixels[idx] ?? "#2a2a2a";
+        const occupied = participantMap.has(`${x},${y}`);
+        const cx = AXIS + x * CELL;
+        const cy = AXIS + y * CELL;
+
+        ctx.globalAlpha = occupied ? 1 : 0.28;
+        ctx.fillStyle = color;
+        ctx.fillRect(cx, cy, CELL, CELL);
+
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(cx + 0.25, cy + 0.25, CELL - 0.5, CELL - 0.5);
+
+        ctx.globalAlpha = occupied ? 0.85 : 0.6;
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `bold ${fontSize}px monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(seat), cx + CELL / 2, cy + CELL / 2);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Bottom X-axis labels
+    ctx.fillStyle = "rgba(180,180,180,0.8)";
+    ctx.font = `bold 8px monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    for (let x = 0; x < server.width; x++) {
+      if (x % STEP === 0)
+        ctx.fillText(String(x), AXIS + x * CELL + CELL / 2, AXIS + server.height * CELL + 2);
+    }
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tifo-seat-map-${server.accessCode}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }, [server, pixelData, participantMap]);
 
   const activateServer = useActivateServer();
   const deactivateServer = useDeactivateServer();
@@ -202,16 +292,28 @@ export default function Admin() {
           {showSeatMap && (
             <Card className="bg-card overflow-hidden">
               <CardContent className="p-4 space-y-3">
-                {/* Legend */}
-                <div className="flex gap-6 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm border border-white/20 opacity-35 bg-white/20" />
-                    Empty
+                {/* Legend + download */}
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex gap-6 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-sm border border-white/20 opacity-35 bg-white/20" />
+                      Empty
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-sm border border-white/20 bg-primary" />
+                      Occupied
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm border border-white/20 bg-primary" />
-                    Occupied
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="font-bold uppercase tracking-wider shrink-0"
+                    disabled={!pixelData?.pixels}
+                    onClick={downloadSeatMap}
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5" />
+                    Download PNG
+                  </Button>
                 </div>
 
                 {/* Scrollable grid */}
