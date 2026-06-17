@@ -21,8 +21,8 @@ if (Number.isNaN(port) || port <= 0) {
 // 🟢 حل مشكلة Cannot GET / وتشغيل الواجهة الأمامية
 // ==========================================
 
-// 1. تحديد مسار مجلد الـ dist الخاص بالفرونت إند (يرجع 3 خطوات للجذر ثم يدخل للفرونت إند)
-const frontendPath = path.join(__dirname, "../../../apps/web/dist"); 
+// 1. التعديل الصحيح للمسار: الرجوع خطوتين للخلف والدخول إلى مجلد الفرونت إند anon-app
+const frontendPath = path.join(__dirname, "../../anon-app/dist"); 
 
 // 2. تفعيل تشغيل الملفات الثابتة (Static Files مثل الصور والـ CSS والـ JS)
 app.use(express.static(frontendPath));
