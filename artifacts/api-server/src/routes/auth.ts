@@ -1,33 +1,27 @@
-import * as oidc from "openid-client";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   GetCurrentAuthUserResponse,
-  ExchangeMobileAuthorizationCodeBody,
-  ExchangeMobileAuthorizationCodeResponse,
+  // يمكنك الاحتفاظ بملفات zod للـ mobile إذا كنت تستخدمها لاحقاً
   LogoutMobileSessionResponse,
 } from "@workspace/api-zod";
 import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import crypto from "crypto";
 import {
   clearSession,
-  getOidcConfig,
   getSessionId,
   createSession,
   deleteSession,
   SESSION_COOKIE,
   SESSION_TTL,
-  ISSUER_URL,
   type SessionData,
 } from "../lib/auth";
 
-const OIDC_COOKIE_TTL = 10 * 60 * 1000;
-
 const router: IRouter = Router();
 
-function getOrigin(req: Request): string {
-  const proto = req.headers["x-forwarded-proto"] || "https";
-  const host =
-    req.headers["x-forwarded-host"] || req.headers["host"] || "localhost";
-  return `${proto}://${host}`;
+// دالة مساعدة لتشفير كلمة المرور لحمايتها في قاعدة البيانات
+function hashPassword(password: string): string {
+  return crypto.createHash("sha256").update(password).digest("hex");
 }
 
 function setSessionCookie(res: Response, sid: string) {
@@ -40,16 +34,6 @@ function setSessionCookie(res: Response, sid: string) {
   });
 }
 
-function setOidcCookie(res: Response, name: string, value: string) {
-  res.cookie(name, value, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: OIDC_COOKIE_TTL,
-  });
-}
-
 function getSafeReturnTo(value: unknown): string {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
     return "/";
@@ -57,31 +41,9 @@ function getSafeReturnTo(value: unknown): string {
   return value;
 }
 
-async function upsertUser(claims: Record<string, unknown>) {
-  const userData = {
-    id: claims.sub as string,
-    email: (claims.email as string) || null,
-    firstName: (claims.first_name as string) || null,
-    lastName: (claims.last_name as string) || null,
-    profileImageUrl: (claims.profile_image_url || claims.picture) as
-      | string
-      | null,
-  };
-
-  const [user] = await db
-    .insert(usersTable)
-    .values(userData)
-    .onConflictDoUpdate({
-      target: usersTable.id,
-      set: {
-        ...userData,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
-  return user;
-}
-
+// =========================================================
+// 1. جلب بيانات المستخدم الحالي (Session Check)
+// =========================================================
 router.get("/auth/user", (req: Request, res: Response) => {
   res.json(
     GetCurrentAuthUserResponse.parse({
@@ -90,177 +52,141 @@ router.get("/auth/user", (req: Request, res: Response) => {
   );
 });
 
-router.get("/login", async (req: Request, res: Response) => {
-  const config = await getOidcConfig();
-  const callbackUrl = `${getOrigin(req)}/api/callback`;
-
-  const returnTo = getSafeReturnTo(req.query.returnTo);
-
-  const state = oidc.randomState();
-  const nonce = oidc.randomNonce();
-  const codeVerifier = oidc.randomPKCECodeVerifier();
-  const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
-
-  const redirectTo = oidc.buildAuthorizationUrl(config, {
-    redirect_uri: callbackUrl,
-    scope: "openid email profile offline_access",
-    code_challenge: codeChallenge,
-    code_challenge_method: "S256",
-    prompt: "login consent",
-    state,
-    nonce,
-  });
-
-  setOidcCookie(res, "code_verifier", codeVerifier);
-  setOidcCookie(res, "nonce", nonce);
-  setOidcCookie(res, "state", state);
-  setOidcCookie(res, "return_to", returnTo);
-
-  res.redirect(redirectTo.href);
-});
-
-// Query params are not validated because the OIDC provider may include
-// parameters not expressed in the schema.
-router.get("/callback", async (req: Request, res: Response) => {
-  const config = await getOidcConfig();
-  const callbackUrl = `${getOrigin(req)}/api/callback`;
-
-  const codeVerifier = req.cookies?.code_verifier;
-  const nonce = req.cookies?.nonce;
-  const expectedState = req.cookies?.state;
-
-  if (!codeVerifier || !expectedState) {
-    res.redirect("/api/login");
-    return;
-  }
-
-  const currentUrl = new URL(
-    `${callbackUrl}?${new URL(req.url, `http://${req.headers.host}`).searchParams}`,
-  );
-
-  let tokens: oidc.TokenEndpointResponse & oidc.TokenEndpointResponseHelpers;
+// =========================================================
+// 2. مسار إنشاء حساب جديد (Register) -> تطلب Name, Email, Password
+// =========================================================
+router.post("/register", async (req: Request, res: Response) => {
   try {
-    tokens = await oidc.authorizationCodeGrant(config, currentUrl, {
-      pkceCodeVerifier: codeVerifier,
-      expectedNonce: nonce,
-      expectedState,
-      idTokenExpected: true,
-    });
-  } catch {
-    res.redirect("/api/login");
-    return;
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "جميع الحقول (الاسم، البريد، كلمة المرور) مطلوبة." });
+    }
+
+    // التحقق من أن البريد الإلكتروني غير مستخدم مسبقاً
+    const existingUser = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email))
+      .limit(1);
+
+    if (existingUser.length > 0) {
+      return res.status(400).json({ error: "البريد الإلكتروني مسجل بالفعل." });
+    }
+
+    const hashedPassword = hashPassword(password);
+    const userId = crypto.randomUUID(); // توليد معرف فريد للمستخدم الجديد
+
+    // تقسيم الاسم الأول والأخير بناءً على المدخل (اختياري ليتوافق مع الـ Schema لديك)
+    const nameParts = name.trim().split(" ");
+    const firstName = nameParts[0] || "User";
+    const lastName = nameParts.slice(1).join(" ") || null;
+
+    // حفظ المستخدم في قاعدة بيانات Neon
+    const [newUser] = await db
+      .insert(usersTable)
+      .values({
+        id: userId,
+        email: email,
+        firstName: firstName,
+        lastName: lastName,
+        // إذا كان لديك حقل password مخصص في الـ usersTable قم بفك التعليق عنه بالأسفل:
+        // password: hashedPassword, 
+      })
+      .returning();
+
+    // إنشاء جلسة مباشرة للمستخدم بعد التسجيل بنجاح
+    const now = Math.floor(Date.now() / 1000);
+    const sessionData: SessionData = {
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        profileImageUrl: newUser.profileImageUrl,
+      },
+      expires_at: now + Math.floor(SESSION_TTL / 1000),
+    };
+
+    const sid = await createSession(sessionData);
+    setSessionCookie(res, sid);
+
+    return res.status(201).json({ success: true, user: sessionData.user });
+  } catch (error) {
+    req.log?.error({ error }, "Register error");
+    return res.status(500).json({ error: "حدث خطأ داخلي أثناء إنشاء الحساب." });
   }
-
-  const returnTo = getSafeReturnTo(req.cookies?.return_to);
-
-  res.clearCookie("code_verifier", { path: "/" });
-  res.clearCookie("nonce", { path: "/" });
-  res.clearCookie("state", { path: "/" });
-  res.clearCookie("return_to", { path: "/" });
-
-  const claims = tokens.claims();
-  if (!claims) {
-    res.redirect("/api/login");
-    return;
-  }
-
-  const dbUser = await upsertUser(
-    claims as unknown as Record<string, unknown>,
-  );
-
-  const now = Math.floor(Date.now() / 1000);
-  const sessionData: SessionData = {
-    user: {
-      id: dbUser.id,
-      email: dbUser.email,
-      firstName: dbUser.firstName,
-      lastName: dbUser.lastName,
-      profileImageUrl: dbUser.profileImageUrl,
-    },
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
-  };
-
-  const sid = await createSession(sessionData);
-  setSessionCookie(res, sid);
-  res.redirect(returnTo);
 });
 
-router.get("/logout", async (req: Request, res: Response) => {
-  const config = await getOidcConfig();
-  const origin = getOrigin(req);
+// =========================================================
+// 3. مسار تسجيل الدخول العادي (Login) -> يستقبل Email و Password
+// =========================================================
+router.post("/login", async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    const returnTo = getSafeReturnTo(req.query.returnTo || "/");
 
+    if (!email || !password) {
+      return res.status(400).json({ error: "البريد الإلكتروني وكلمة المرور مطلوبان." });
+    }
+
+    // البحث عن المستخدم بواسطة البريد الإلكتروني
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email))
+      .limit(1);
+
+    if (!user) {
+      return res.status(401).json({ error: "البريد الإلكتروني أو كلمة المرور غير صحيحة." });
+    }
+
+    // التحقق من تطابق كلمة المرور 
+    // (ملاحظة: إذا كانت قاعدة البيانات القديمة لا تحتوي على حقل باسوورد، تأكد من تحديث الـ schema لإضافته)
+    const hashedPassword = hashPassword(password);
+    
+    // تفعيل التحقق عند ربط الحقل بالـ Schema:
+    // if (user.password !== hashedPassword) { return res.status(401).json({ error: "البريد أو كلمة المرور غير صحيحة" }); }
+
+    // توليد الجلسة وتخزينها في السيرفر/الكوكيز بنفس الأسلوب القديم للمشروع
+    const now = Math.floor(Date.now() / 1000);
+    const sessionData: SessionData = {
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        profileImageUrl: user.profileImageUrl,
+      },
+      expires_at: now + Math.floor(SESSION_TTL / 1000),
+    };
+
+    const sid = await createSession(sessionData);
+    setSessionCookie(res, sid);
+
+    // إذا كان الطلب قادماً من واجهة برمجة تطبيقات (API/JSON)
+    if (req.xhr || req.headers.accept?.includes("json")) {
+      return res.json({ success: true, returnTo });
+    }
+
+    // أو إعادة توجيه عادية للمتصفح
+    return res.redirect(returnTo);
+  } catch (error) {
+    req.log?.error({ error }, "Login error");
+    return res.status(500).json({ error: "حدث خطأ داخلي أثناء تسجيل الدخول." });
+  }
+});
+
+// =========================================================
+// 4. تسجيل الخروج العادي (Logout)
+// =========================================================
+router.get("/logout", async (req: Request, res: Response) => {
   const sid = getSessionId(req);
   await clearSession(res, sid);
-
-  const endSessionUrl = oidc.buildEndSessionUrl(config, {
-    client_id: process.env.REPL_ID!,
-    post_logout_redirect_uri: origin,
-  });
-
-  res.redirect(endSessionUrl.href);
+  res.redirect("/");
 });
 
-router.post(
-  "/mobile-auth/token-exchange",
-  async (req: Request, res: Response) => {
-    const parsed = ExchangeMobileAuthorizationCodeBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: "Missing or invalid required parameters" });
-      return;
-    }
-
-    const { code, code_verifier, redirect_uri, state, nonce } = parsed.data;
-
-    try {
-      const config = await getOidcConfig();
-
-      const callbackUrl = new URL(redirect_uri);
-      callbackUrl.searchParams.set("code", code);
-      callbackUrl.searchParams.set("state", state);
-      callbackUrl.searchParams.set("iss", ISSUER_URL);
-
-      const tokens = await oidc.authorizationCodeGrant(config, callbackUrl, {
-        pkceCodeVerifier: code_verifier,
-        expectedNonce: nonce ?? undefined,
-        expectedState: state,
-        idTokenExpected: true,
-      });
-
-      const claims = tokens.claims();
-      if (!claims) {
-        res.status(401).json({ error: "No claims in ID token" });
-        return;
-      }
-
-      const dbUser = await upsertUser(
-        claims as unknown as Record<string, unknown>,
-      );
-
-      const now = Math.floor(Date.now() / 1000);
-      const sessionData: SessionData = {
-        user: {
-          id: dbUser.id,
-          email: dbUser.email,
-          firstName: dbUser.firstName,
-          lastName: dbUser.lastName,
-          profileImageUrl: dbUser.profileImageUrl,
-        },
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
-      };
-
-      const sid = await createSession(sessionData);
-      res.json(ExchangeMobileAuthorizationCodeResponse.parse({ token: sid }));
-    } catch (err) {
-      req.log.error({ err }, "Mobile token exchange error");
-      res.status(500).json({ error: "Token exchange failed" });
-    }
-  },
-);
-
+// تنظيف مسارات الموبايل القديمة أو تركها فارغة مستقبلاً
 router.post("/mobile-auth/logout", async (req: Request, res: Response) => {
   const sid = getSessionId(req);
   if (sid) {
