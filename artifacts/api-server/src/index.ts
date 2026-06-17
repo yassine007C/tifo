@@ -30,8 +30,6 @@ const __dirname = dirname(__filename);
 // 🟢 حل مشكلة Cannot GET / وتشغيل الواجهة الأمامية
 // ==========================================
 
-// 2. تم تغيير anon-app إلى tifo ليتطابق مع اسم مجلدك الفعلي
-// تعديل المسار ليدخل إلى مجلد public الفعلي الذي بناه Vite
 const frontendPath = path.join(__dirname, "../../tifo/dist/public");
 
 // تفعيل تشغيل الملفات الثابتة (Static Files)
