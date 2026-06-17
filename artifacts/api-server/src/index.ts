@@ -31,7 +31,8 @@ const __dirname = dirname(__filename);
 // ==========================================
 
 // 2. تم تغيير anon-app إلى tifo ليتطابق مع اسم مجلدك الفعلي
-const frontendPath = path.join(__dirname, "../../tifo/dist"); 
+// تعديل المسار ليدخل إلى مجلد public الفعلي الذي بناه Vite
+const frontendPath = path.join(__dirname, "../../tifo/dist/public");
 
 // تفعيل تشغيل الملفات الثابتة (Static Files)
 app.use(express.static(frontendPath));
