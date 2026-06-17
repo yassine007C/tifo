@@ -2,6 +2,9 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import path from "path";
 import express from "express";
+// 1. إضافة مكتبات Node.js الأساسية لتعريف __dirname في نظام ESM
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 
 const rawPort = process.env["PORT"];
 
@@ -18,16 +21,22 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 // ==========================================
+// 🟢 تعريف __dirname الخاص بـ ES Modules
+// ==========================================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// ==========================================
 // 🟢 حل مشكلة Cannot GET / وتشغيل الواجهة الأمامية
 // ==========================================
 
-// 1. التعديل الصحيح للمسار: الرجوع خطوتين للخلف والدخول إلى مجلد الفرونت إند anon-app
-const frontendPath = path.join(__dirname, "../../anon-app/dist"); 
+// 2. تم تغيير anon-app إلى tifo ليتطابق مع اسم مجلدك الفعلي
+const frontendPath = path.join(__dirname, "../../tifo/dist"); 
 
-// 2. تفعيل تشغيل الملفات الثابتة (Static Files مثل الصور والـ CSS والـ JS)
+// تفعيل تشغيل الملفات الثابتة (Static Files)
 app.use(express.static(frontendPath));
 
-// 3. حل Express 5 الشامل: توجيه أي مسار أو تحديث صفحة (Refresh) لملف index.html
+// حل Express 5 الشامل: توجيه أي مسار لملف index.html
 app.get(/.*/, (req, res) => {
   res.sendFile(path.join(frontendPath, "index.html"));
 });
