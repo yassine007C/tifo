@@ -9,6 +9,7 @@ import Join from "@/pages/join";
 import Lobby from "@/pages/lobby";
 import Display from "@/pages/display";
 import Admin from "@/pages/admin";
+import Login from "./pages/login";
 
 const queryClient = new QueryClient({
   defaultOptions: {
