@@ -11,8 +11,8 @@ import Display from "@/pages/display";
 import Admin from "@/pages/admin";
 import Login from "./pages/login";
 
-<Route path="/login" component={Login} /> 
-// أو <Route path="/login" element={<Login />} /> حسب مكتبة التوجيه لديك
+
+حسب مكتبة التوجيه لديك
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -45,6 +45,7 @@ function App() {
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
+      <Route path="/login" component={Login} /> 
     </QueryClientProvider>
   );
 }
