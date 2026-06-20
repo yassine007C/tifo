@@ -10,6 +10,7 @@ import Lobby from "@/pages/lobby";
 import Display from "@/pages/display";
 import Admin from "@/pages/admin";
 import Login from "./pages/login";
+import Register from "@/pages/register";
 
 
 
@@ -34,6 +35,7 @@ function Router() {
       
       {/* 🚀 السطر الجديد يجب أن يكون هنا داخل الـ Switch وقبل الـ NotFound */}
       <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
       
       <Route component={NotFound} />
     </Switch>
