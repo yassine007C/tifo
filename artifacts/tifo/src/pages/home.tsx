@@ -38,9 +38,11 @@ export default function Home() {
               Turn the crowd into a giant living canvas. Join a Tifo server, hold up your phone, and become part of the art.
             </p>
           </div>
-          <Button size="lg" onClick={login} className="text-xl px-12 py-8 font-bold uppercase tracking-widest bg-primary hover:bg-primary/90 text-primary-foreground">
-            Enter the Stadium
-          </Button>
+            <Link href="/login">
+              <Button size="lg" className="text-xl px-12 py-8 font-bold uppercase tracking-widest bg-primary hover:bg-primary/90 text-primary-foreground">
+                Enter the Stadium
+              </Button>
+            </Link>
         </div>
       </Layout>
     );
