@@ -4,7 +4,12 @@ import { useAuth } from "@workspace/replit-auth-web";
 import { Button } from "@/components/ui/button";
 
 export function Layout({ children, hideNav = false }: { children: ReactNode, hideNav?: boolean }) {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+
+  // توجيه تسجيل الخروج للمسار العادي الذي برمجناه في السيرفر
+  const handleLogout = () => {
+    window.location.href = '/api/logout';
+  };
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
@@ -15,15 +20,23 @@ export function Layout({ children, hideNav = false }: { children: ReactNode, hid
               TIFO
             </Link>
             
-            {isAuthenticated && (
+            {/* التحقق: إذا كان مسجلاً نعرض بياناته، وإذا لم يكن نعرض زر الدخول */}
+            {isAuthenticated ? (
               <div className="flex items-center gap-4">
                 <span className="text-sm font-medium text-muted-foreground hidden md:inline-block">
                   {user?.firstName || user?.email}
                 </span>
-                <Button variant="ghost" size="sm" onClick={logout} className="font-bold uppercase tracking-wider text-xs">
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="font-bold uppercase tracking-wider text-xs">
                   Log out
                 </Button>
               </div>
+            ) : (
+              // الزر الجديد الذي يوجه المستخدم لصفحة الواجهة
+              <Link href="/login">
+                <Button variant="default" size="sm" className="font-bold uppercase tracking-wider text-xs">
+                  Log in
+                </Button>
+              </Link>
             )}
           </div>
         </header>
