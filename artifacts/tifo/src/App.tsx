@@ -12,7 +12,7 @@ import Admin from "@/pages/admin";
 import Login from "./pages/login";
 
 
-حسب مكتبة التوجيه لديك
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
