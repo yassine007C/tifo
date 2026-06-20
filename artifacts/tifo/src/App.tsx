@@ -32,6 +32,7 @@ function Router() {
       <Route path="/server/:id/display" component={Display} />
       <Route path="/server/:id/admin" component={Admin} />
       <Route component={NotFound} />
+      <Route path="/login" component={Login} /> 
     </Switch>
   );
 }
@@ -45,7 +46,6 @@ function App() {
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
-      <Route path="/login" component={Login} /> 
     </QueryClientProvider>
   );
 }
