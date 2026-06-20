@@ -31,8 +31,11 @@ function Router() {
       <Route path="/server/:id" component={Lobby} />
       <Route path="/server/:id/display" component={Display} />
       <Route path="/server/:id/admin" component={Admin} />
+      
+      {/* 🚀 السطر الجديد يجب أن يكون هنا داخل الـ Switch وقبل الـ NotFound */}
+      <Route path="/login" component={Login} />
+      
       <Route component={NotFound} />
-      <Route path="/login" component={Login} /> 
     </Switch>
   );
 }
@@ -46,6 +49,7 @@ function App() {
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
+      {/* ❌ تم مسح السطر من هنا لأنه كان في المكان الخطأ */}
     </QueryClientProvider>
   );
 }
