@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter"; // استيراد useLocation هنا
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [, setLocation] = useLocation(); // تعريف دالة التوجيه
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,11 +19,11 @@ export default function Login() {
       });
 
       if (response.ok) {
-        // إذا نجح الدخول، نرسله للصفحة الرئيسية
-        window.location.href = "/";
+        // التوجيه إلى الصفحة الرئيسية بسلاسة وبدون إعادة تحميل المتصفح
+        setLocation("/"); 
       } else {
         const data = await response.json();
-        setError(data.error || "login failed");
+        setError(data.error || "Login failed");
       }
     } catch (err) {
       setError("A connection error occurred.");
@@ -30,7 +31,7 @@ export default function Login() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 space-y-4">
       <div className="w-full max-w-md p-8 space-y-6 bg-card text-card-foreground shadow-lg rounded-xl border">
         <h2 className="text-2xl font-bold text-center">Log in</h2>
         
@@ -53,7 +54,7 @@ export default function Login() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">password</label>
+            <label className="text-sm font-medium">Password</label>
             <input
               type="password"
               value={password}
@@ -67,22 +68,17 @@ export default function Login() {
             type="submit"
             className="w-full py-2 mt-4 text-white bg-primary rounded-md hover:bg-primary/90"
           >
-            login
+            Login
           </button>
         </form>
-
       </div>
 
-       <p className="text-center text-sm text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground">
         You do not have an account?{" "}
         <Link href="/register" className="text-primary font-bold">
           Register
         </Link>
       </p>
-
-      
     </div>
-
-
   );
 }
