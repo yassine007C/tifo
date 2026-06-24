@@ -69,6 +69,11 @@ export default function Login() {
             login
           </button>
         </form>
+
+
+        <p className="text-center text-sm text-muted-foreground">
+          You do not have an account? <Link href="/login" className="text-primary font-bold">register</Link>
+        </p>
       </div>
     </div>
   );
