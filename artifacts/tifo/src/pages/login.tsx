@@ -21,17 +21,17 @@ export default function Login() {
         window.location.href = "/";
       } else {
         const data = await response.json();
-        setError(data.error || "فشل تسجيل الدخول");
+        setError(data.error || "login failed");
       }
     } catch (err) {
-      setError("حدث خطأ في الاتصال");
+      setError("A connection error occurred.");
     }
   };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <div className="w-full max-w-md p-8 space-y-6 bg-card text-card-foreground shadow-lg rounded-xl border">
-        <h2 className="text-2xl font-bold text-center">تسجيل الدخول</h2>
+        <h2 className="text-2xl font-bold text-center">Log in</h2>
         
         {error && (
           <div className="p-3 text-sm text-red-500 bg-red-100 rounded-md">
@@ -41,7 +41,7 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">البريد الإلكتروني</label>
+            <label className="text-sm font-medium">Email</label>
             <input
               type="email"
               value={email}
@@ -52,7 +52,7 @@ export default function Login() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">كلمة المرور</label>
+            <label className="text-sm font-medium">password</label>
             <input
               type="password"
               value={password}
@@ -66,7 +66,7 @@ export default function Login() {
             type="submit"
             className="w-full py-2 mt-4 text-white bg-primary rounded-md hover:bg-primary/90"
           >
-            دخول
+            login
           </button>
         </form>
       </div>
