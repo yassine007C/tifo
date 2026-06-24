@@ -38,7 +38,7 @@ export default function Home() {
               Turn the crowd into a giant living canvas. Join a Tifo server, hold up your phone, and become part of the art.
             </p>
           </div>
-            <Link href="/login">
+            <Link href="/register">
               <Button size="lg" className="text-xl px-12 py-8 font-bold uppercase tracking-widest bg-primary hover:bg-primary/90 text-primary-foreground">
                 Enter the Stadium
               </Button>
