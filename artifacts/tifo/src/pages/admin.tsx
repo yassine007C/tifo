@@ -111,6 +111,9 @@ export default function Admin() {
         const cx = AXIS + x * CELL;
         const cy = AXIS + y * CELL;
 
+        // 🛠️ الإصلاح هنا: تعريف متغير occupied 
+        const occupied = count > 0;
+
         ctx.globalAlpha = count === 0 ? 0.25 : count === 1 ? 0.55 : count === 2 ? 0.78 : 1;
         ctx.fillStyle = color;
         ctx.fillRect(cx, cy, CELL, CELL);
@@ -120,7 +123,7 @@ export default function Admin() {
         ctx.lineWidth = 0.5;
         ctx.strokeRect(cx + 0.25, cy + 0.25, CELL - 0.5, CELL - 0.5);
 
-        ctx.globalAlpha = occupied ? 0.85 : 0.6;
+        ctx.globalAlpha = occupied ? 0.85 : 0.6; // الآن سيعمل هذا السطر بنجاح
         ctx.fillStyle = "#ffffff";
         ctx.font = `bold ${fontSize}px monospace`;
         ctx.textAlign = "center";
