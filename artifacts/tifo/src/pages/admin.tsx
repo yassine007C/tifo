@@ -27,7 +27,7 @@ export default function Admin() {
 
   const [copied, setCopied] = useState(false);
   const [showSeatMap, setShowSeatMap] = useState(false);
-  const [isUploadingMap, setIsUploadingMap] = useState(false); // 👈 حالة جديدة لمراقبة الرفع
+  const [isUploadingMap, setIsUploadingMap] = useState(false);
 
   const { data: server, isLoading: isServerLoading } = useGetServer(id, {
     query: {
@@ -108,10 +108,9 @@ export default function Admin() {
         const idx = y * server.width + x;
         const seat = idx + 1;
         const color = pixelData.pixels[idx] ?? "#2a2a2a";
-        const count = participantMap.get(`${x},${y}`)?.length ?? 0;
-        const cx = AXIS + x * CELL;
-        const cy = AXIS + y * CELL;
-        const occupied = count > 0; // 👈 تم إصلاح المتغير المفقود
+        const occupants = participantMap.get(`${x},${y}`) ?? [];
+        const count = occupants.length;
+        const occupied = count > 0;
 
         ctx.globalAlpha = count === 0 ? 0.25 : count === 1 ? 0.55 : count === 2 ? 0.78 : 1;
         ctx.fillStyle = color;
@@ -142,33 +141,38 @@ export default function Admin() {
         ctx.fillText(String(x), AXIS + x * CELL + CELL / 2, AXIS + server.height * CELL + 2);
     }
 
-    // 🚀 كود الرفع الجديد للخادم بدلاً من التحميل المحلي
+    // 🚀 الرفع المباشر إلى سحابة Cloudinary من المتصفح
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       
       setIsUploadingMap(true);
       
       try {
-        const file = new File([blob], `tifo-seat-map-${server.accessCode}.png`, { type: "image/png" });
         const formData = new FormData();
-        formData.append("image", file); // يجب أن يستقبل السيرفر الملف باسم "image"
+        formData.append("file", blob);
+        
+        // ⚠️ هام جداً: استبدل YOUR_UNSIGNED_PRESET باسم الـ Preset الخاص بك في كلوديناري
+        formData.append("upload_preset", "YOUR_UNSIGNED_PRESET");
 
-        // تأكد من أن هذا الرابط يتطابق مع مسار الرفع في السيرفر الخاص بك
-        const response = await fetch("/api/storage/upload", {
+        // ⚠️ هام جداً: استبدل YOUR_CLOUD_NAME باسم حسابك في كلوديناري
+        const cloudinaryUrl = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/image/upload";
+
+        const response = await fetch(cloudinaryUrl, {
           method: "POST",
           body: formData,
         });
 
-        if (!response.ok) throw new Error("فشل رفع الصورة");
+        if (!response.ok) throw new Error("فشل الرفع السحابي");
 
         const data = await response.json();
-        const publicUrl = data.imageUrl || data.url || data.objectPath; // استخراج الرابط من الرد
+        const publicUrl = data.secure_url; // الرابط الحقيقي والقابل للمشاركة
 
         // نسخ الرابط تلقائياً للحافظة
         await navigator.clipboard.writeText(publicUrl);
         toast({ 
-          title: "تم إنشاء الرابط!", 
+          title: "تم إنشاء الرابط السحابي!", 
           description: "تم نسخ الرابط القابل للمشاركة إلى الحافظة بنجاح.",
+          className: "bg-green-600 text-white border-none"
         });
 
         // فتح الصورة في نافذة جديدة للتأكد
@@ -177,8 +181,8 @@ export default function Admin() {
       } catch (error) {
         console.error("Upload error:", error);
         toast({ 
-          title: "حدث خطأ", 
-          description: "لم نتمكن من رفع الصورة، تأكد من إعدادات السيرفر.", 
+          title: "حدث خطأ في الرفع", 
+          description: "يرجى التأكد من اسم الحساب والـ Preset في الكود.", 
           variant: "destructive" 
         });
       } finally {
@@ -311,6 +315,7 @@ export default function Admin() {
             </Card>
           </div>
         </div>
+
         {/* Seat Map */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
