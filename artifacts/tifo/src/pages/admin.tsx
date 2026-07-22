@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Play, Square, Users, Check, Copy, Grid3X3, Download } from "lucide-react";
+import { ArrowLeft, Play, Square, Users, Check, Copy, Grid3X3, Download, Loader2 } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,6 +27,7 @@ export default function Admin() {
 
   const [copied, setCopied] = useState(false);
   const [showSeatMap, setShowSeatMap] = useState(false);
+  const [isUploadingMap, setIsUploadingMap] = useState(false); // 👈 حالة جديدة لمراقبة الرفع
 
   const { data: server, isLoading: isServerLoading } = useGetServer(id, {
     query: {
@@ -110,9 +111,7 @@ export default function Admin() {
         const count = participantMap.get(`${x},${y}`)?.length ?? 0;
         const cx = AXIS + x * CELL;
         const cy = AXIS + y * CELL;
-
-        // 🛠️ الإصلاح هنا: تعريف متغير occupied 
-        const occupied = count > 0;
+        const occupied = count > 0; // 👈 تم إصلاح المتغير المفقود
 
         ctx.globalAlpha = count === 0 ? 0.25 : count === 1 ? 0.55 : count === 2 ? 0.78 : 1;
         ctx.fillStyle = color;
@@ -123,7 +122,7 @@ export default function Admin() {
         ctx.lineWidth = 0.5;
         ctx.strokeRect(cx + 0.25, cy + 0.25, CELL - 0.5, CELL - 0.5);
 
-        ctx.globalAlpha = occupied ? 0.85 : 0.6; // الآن سيعمل هذا السطر بنجاح
+        ctx.globalAlpha = occupied ? 0.85 : 0.6;
         ctx.fillStyle = "#ffffff";
         ctx.font = `bold ${fontSize}px monospace`;
         ctx.textAlign = "center";
@@ -143,16 +142,50 @@ export default function Admin() {
         ctx.fillText(String(x), AXIS + x * CELL + CELL / 2, AXIS + server.height * CELL + 2);
     }
 
-    canvas.toBlob((blob) => {
+    // 🚀 كود الرفع الجديد للخادم بدلاً من التحميل المحلي
+    canvas.toBlob(async (blob) => {
       if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `tifo-seat-map-${server.accessCode}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
+      
+      setIsUploadingMap(true);
+      
+      try {
+        const file = new File([blob], `tifo-seat-map-${server.accessCode}.png`, { type: "image/png" });
+        const formData = new FormData();
+        formData.append("image", file); // يجب أن يستقبل السيرفر الملف باسم "image"
+
+        // تأكد من أن هذا الرابط يتطابق مع مسار الرفع في السيرفر الخاص بك
+        const response = await fetch("/api/storage/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) throw new Error("فشل رفع الصورة");
+
+        const data = await response.json();
+        const publicUrl = data.imageUrl || data.url || data.objectPath; // استخراج الرابط من الرد
+
+        // نسخ الرابط تلقائياً للحافظة
+        await navigator.clipboard.writeText(publicUrl);
+        toast({ 
+          title: "تم إنشاء الرابط!", 
+          description: "تم نسخ الرابط القابل للمشاركة إلى الحافظة بنجاح.",
+        });
+
+        // فتح الصورة في نافذة جديدة للتأكد
+        window.open(publicUrl, '_blank');
+
+      } catch (error) {
+        console.error("Upload error:", error);
+        toast({ 
+          title: "حدث خطأ", 
+          description: "لم نتمكن من رفع الصورة، تأكد من إعدادات السيرفر.", 
+          variant: "destructive" 
+        });
+      } finally {
+        setIsUploadingMap(false);
+      }
     });
-  }, [server, pixelData, participantMap]);
+  }, [server, pixelData, participantMap, toast]);
 
   const activateServer = useActivateServer();
   const deactivateServer = useDeactivateServer();
@@ -316,11 +349,20 @@ export default function Admin() {
                     size="sm"
                     variant="outline"
                     className="font-bold uppercase tracking-wider shrink-0"
-                    disabled={!pixelData?.pixels}
+                    disabled={!pixelData?.pixels || isUploadingMap}
                     onClick={downloadSeatMap}
                   >
-                    <Download className="w-3.5 h-3.5 mr-1.5" />
-                    Download PNG
+                    {isUploadingMap ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                        Generating Link...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5 mr-1.5" />
+                        Shareable Link
+                      </>
+                    )}
                   </Button>
                 </div>
 
