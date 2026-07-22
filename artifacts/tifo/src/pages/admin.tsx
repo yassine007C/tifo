@@ -152,10 +152,10 @@ export default function Admin() {
         formData.append("file", blob);
         
         // ⚠️ هام جداً: استبدل YOUR_UNSIGNED_PRESET باسم الـ Preset الخاص بك في كلوديناري
-        formData.append("upload_preset", "YOUR_UNSIGNED_PRESET");
+        formData.append("upload_preset", "ez7mpTcr8S3exaoSuib_IW2P7h4");
 
         // ⚠️ هام جداً: استبدل YOUR_CLOUD_NAME باسم حسابك في كلوديناري
-        const cloudinaryUrl = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/image/upload";
+        const cloudinaryUrl = "https://api.cloudinary.com/v1_1/dilefzwf7/image/upload";
 
         const response = await fetch(cloudinaryUrl, {
           method: "POST",
